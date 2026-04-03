@@ -177,11 +177,19 @@ export default function QuotesList() {
     // State untuk tracking jumlah download per quote (bisa disimpan di localStorage)
     const [downloadCounts, setDownloadCounts] = useState({});
 
-    // Load download counts dari localStorage saat mount
+    // State untuk tracking status "pernah digunakan" per quote
+    const [usedStatus, setUsedStatus] = useState({});
+
+    // Load download counts dan used status dari localStorage saat mount
     useEffect(() => {
         const savedCounts = localStorage.getItem("quoteDownloadCounts");
         if (savedCounts) {
             setDownloadCounts(JSON.parse(savedCounts));
+        }
+
+        const savedUsedStatus = localStorage.getItem("quoteUsedStatus");
+        if (savedUsedStatus) {
+            setUsedStatus(JSON.parse(savedUsedStatus));
         }
     }, []);
 
@@ -193,6 +201,16 @@ export default function QuotesList() {
         };
         setDownloadCounts(newCounts);
         localStorage.setItem("quoteDownloadCounts", JSON.stringify(newCounts));
+    };
+
+    // Toggle status "pernah digunakan"
+    const toggleUsedStatus = (quoteId) => {
+        const newStatus = {
+            ...usedStatus,
+            [quoteId]: !usedStatus[quoteId]
+        };
+        setUsedStatus(newStatus);
+        localStorage.setItem("quoteUsedStatus", JSON.stringify(newStatus));
     };
 
     useEffect(() => {
@@ -583,6 +601,7 @@ export default function QuotesList() {
                             filteredQuotes.map((q) => {
                                 const state = quoteStates[q.id] || {};
                                 const downloadCount = downloadCounts[q.id] || 0;
+                                const isUsed = usedStatus[q.id] || false;
                                 return (
                                     <div
                                         key={q.id}
@@ -619,9 +638,9 @@ export default function QuotesList() {
                                                 {highlightText(q.text, searchTerm)}
                                             </p>
 
-                                            <div className="flex items-center justify-between mt-1 mb-2">
-                                                {/* Kiri: tombol like, copy, share */}
-                                                <div className="flex items-center gap-2 text-gray-500 text-[14px]">
+                                            <div className="flex items-center justify-between mt-1 mb-2 flex-wrap gap-2">
+                                                {/* Kiri: tombol like, copy, share, dan tandai digunakan */}
+                                                <div className="flex items-center gap-2 text-gray-500 text-[14px] flex-wrap">
                                                     <button
                                                         onClick={() => handleLike(q.id)}
                                                         disabled={state.isLiking}
@@ -631,26 +650,40 @@ export default function QuotesList() {
                                                             className={`ri-heart-${state.isLiked ? "fill" : "line"} ${state.isLiked ? "text-red-500" : ""
                                                                 }`}
                                                         ></i>
-                                                        <span className="text-xs">{state.likesCount}</span>
+                                                        <span className="text-xs">{state.likesCount} suka</span>
                                                     </button>
 
-                                                    <button
+                                                    {/* <button
                                                         onClick={() => handleCopy(q.id, q.text, q.author)}
                                                         className="hover:text-gray-700"
                                                     >
                                                         <i className="ri-clipboard-line"></i>
-                                                    </button>
+                                                    </button> */}
 
-                                                    <button
+                                                    <button 
                                                         onClick={() => handleShare(q)}
                                                         disabled={sharingId === q.id}
-                                                        className="hover:text-gray-700"
+                                                        className="hover:text-gray-700 text-xs"
                                                     >
                                                         {sharingId === q.id ? (
                                                             <i className="ri-loader-4-line animate-spin"></i>
                                                         ) : (
                                                             <i className="ri-share-line"></i>
-                                                        )}
+                                                        )} bagikan
+                                                    </button>
+
+                                                    {/* Tombol Tandai Pernah Digunakan - VERSI UPDATE dengan kata-kata dan warna biru */}
+                                                    <button
+                                                        onClick={() => toggleUsedStatus(q.id)}
+                                                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-200 ${isUsed
+                                                                ? "bg-[#355485] text-white"
+                                                                : "bg-gray-100 text-[#355485] border border-[#355485]"
+                                                            }`}
+                                                    >
+                                                        {/* <i className={`ri-checkbox-${isUsed ? "fill" : "blank"}-line text-sm`}></i> */}
+                                                        <span className="text-xs font-medium whitespace-nowrap">
+                                                            {isUsed ? "Sudah Dipakai" : "Tandai Dipakai"}
+                                                        </span>
                                                     </button>
                                                 </div>
 
