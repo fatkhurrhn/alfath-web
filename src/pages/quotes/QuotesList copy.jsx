@@ -103,6 +103,28 @@ export default function QuotesList() {
     const [showSearch, setShowSearch] = useState(false); // state untuk menampilkan input search
     const [showFilterSheet, setShowFilterSheet] = useState(false); // state untuk menampilkan bottom sheet filter
 
+    const [showHeader, setShowHeader] = useState(true);
+    const [lastScrollY, setLastScrollY] = useState(0);
+
+    useEffect(() => {
+        const handleScroll = () => {
+          const currentScrollY = window.scrollY;
+    
+          if (currentScrollY > lastScrollY) {
+            // Scroll ke bawah -> sembunyikan header
+            setShowHeader(false);
+          } else {
+            // Scroll ke atas -> tampilkan header
+            setShowHeader(true);
+          }
+    
+          setLastScrollY(currentScrollY);
+        };
+    
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
+      }, [lastScrollY]);
+
     // fetch quotes
     useEffect(() => {
         const fetchQuotes = async () => {
@@ -230,16 +252,11 @@ export default function QuotesList() {
         <div className="bg-gray-50 min-h-screen text-gray-800">
             <AddQuote />
             <BottomNav />
-            <div className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-200">
-                <div className="flex items-center justify-between px-3 py-3">
-                    {/* Left: Back Link */}
-                    <Link
-                        to="/"
-                        className="flex items-center font-semibold gap-2 text-[#355485] text-[15px]"
-                    >
+            <div className={`fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-200 transition-transform duration-300 ${showHeader ? "translate-y-0" : "-translate-y-full"}`}>
+                    <div className="max-w-xl mx-auto flex items-center justify-between px-3 py-3">
+                      <Link to="/" className="flex items-center font-semibold gap-2 text-[#355485] text-[15px]">
                         <i className="ri-arrow-left-line"></i> Quotes
-                    </Link>
-
+                      </Link>
                     {/* Right: Search + Equalizer */}
                     <div className="flex items-center gap-4">
                         <button
@@ -255,7 +272,7 @@ export default function QuotesList() {
                             <i className="ri-equalizer-line text-xl"></i>
                         </button>
                     </div>
-                </div>
+                    </div>
 
                 {/* Input Search yang muncul ketika tombol search diklik */}
                 {showSearch && (
@@ -364,7 +381,7 @@ export default function QuotesList() {
                                 return (
                                     <div
                                         key={q.id}
-                                        className="relative flex gap-4 px-1 mt-4 border-b mb-3 border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors"
+                                        className="relative flex gap-4 px-1 x   mt-4 border-b mb-3 border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors"
                                     >
                                         {/* Avatar */}
                                         <div className="flex-shrink-0 mr-[-4px]">

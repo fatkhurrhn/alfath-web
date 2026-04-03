@@ -29,49 +29,79 @@ const getCategoryLabel = (cat) => {
     }
 };
 
-/* ---------- Generate Image Quote ---------- */
 const generateQuoteImage = async (quote, author, category) => {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
 
-    // ukuran square
-    canvas.width = 1080;
-    canvas.height = 1080;
+        // ukuran square
+        canvas.width = 1080;
+        canvas.height = 1080;
 
-    // background putih
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Pilih background berdasarkan author
+        let bgImage = new Image();
+        let bgUrl = "/img/bg-storythur.png"; // default
 
-    ctx.fillStyle = "#333";
-    ctx.textAlign = "center";
+        if (author.toLowerCase() === "fatkhurrhn") {
+            bgUrl = "/img/bg-fatkhurrhn.png";
+        } else if (author.toLowerCase() === "storythur") {
+            bgUrl = "/img/bg-storythur.png";
+        }
 
-    // Author di atas
-    ctx.font = "bold 42px Arial";
-    ctx.fillText(`— ${author} —`, canvas.width / 2, 120);
+        bgImage.crossOrigin = "Anonymous";
+        bgImage.src = bgUrl;
 
-    // Quote di tengah (wrap + center vertical)
-    ctx.font = "bold 58px Georgia";
-    const wrapped = wrapText(ctx, `"${quote}"`, 900);
-    const textHeight = wrapped.length * 70;
-    const startY = canvas.height / 2 - textHeight / 2;
+        bgImage.onload = () => {
+            // Gambar background
+            ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
 
-    wrapped.forEach((line, i) => {
-        ctx.fillText(line, canvas.width / 2, startY + i * 70);
+            // Setting untuk teks quote
+            ctx.fillStyle = "#000000";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle"; // INI KUNCI NYA!
+            ctx.font = "52px Arial";
+
+            const maxWidth = 900;
+            const wrapped = wrapText(ctx, quote, maxWidth);
+            const lineHeight = 70;
+
+            // Hitung posisi Y awal untuk baris pertama
+            const totalTextHeight = wrapped.length * lineHeight;
+            const startY = (canvas.height - totalTextHeight) / 2 + (lineHeight / 2);
+
+            wrapped.forEach((line, i) => {
+                ctx.fillText(line, canvas.width / 2, startY + i * lineHeight);
+            });
+
+            resolve(canvas.toDataURL("image/png"));
+        };
+
+        bgImage.onerror = () => {
+            console.error("Gagal load background image, menggunakan background putih");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#000000";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle"; // INI JUGA
+            ctx.font = "52px Arial";
+
+            const maxWidth = 900;
+            const wrapped = wrapText(ctx, quote, maxWidth);
+            const lineHeight = 70;
+            const totalTextHeight = wrapped.length * lineHeight;
+            const startY = (canvas.height - totalTextHeight) / 2 + (lineHeight / 2);
+
+            wrapped.forEach((line, i) => {
+                ctx.fillText(line, canvas.width / 2, startY + i * lineHeight);
+            });
+
+            resolve(canvas.toDataURL("image/png"));
+        };
     });
-
-    // Category (atas watermark)
-    ctx.font = "italic 38px Arial";
-    ctx.fillText(`#${category}`, canvas.width / 2, canvas.height - 140);
-
-    // Watermark bawah
-    ctx.font = "30px Arial";
-    ctx.fillStyle = "#777";
-    ctx.fillText("selengkapnya ... http://alfathh.vercel.app/ ", canvas.width / 2, canvas.height - 70);
-
-    return canvas.toDataURL("image/png");
 };
 
-// helper wrapText → return array line
+// helper wrapText
 function wrapText(ctx, text, maxWidth) {
     const words = text.split(" ");
     let line = "";
@@ -81,13 +111,13 @@ function wrapText(ctx, text, maxWidth) {
         const metrics = ctx.measureText(testLine);
         const testWidth = metrics.width;
         if (testWidth > maxWidth && n > 0) {
-            lines.push(line);
+            lines.push(line.trim());
             line = words[n] + " ";
         } else {
             line = testLine;
         }
     }
-    lines.push(line);
+    lines.push(line.trim());
     return lines;
 }
 
@@ -99,31 +129,31 @@ export default function QuotesList() {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
 
-    const [quoteStates, setQuoteStates] = useState({}); // state per-quote
-    const [showSearch, setShowSearch] = useState(false); // state untuk menampilkan input search
-    const [showFilterSheet, setShowFilterSheet] = useState(false); // state untuk menampilkan bottom sheet filter
+    const [quoteStates, setQuoteStates] = useState({});
+    const [showSearch, setShowSearch] = useState(false);
+    const [showFilterSheet, setShowFilterSheet] = useState(false);
 
     const [showHeader, setShowHeader] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
+    const [sharingId, setSharingId] = useState(null);
+    const [downloadingId, setDownloadingId] = useState(null); // state untuk loading download
 
     useEffect(() => {
         const handleScroll = () => {
-          const currentScrollY = window.scrollY;
-    
-          if (currentScrollY > lastScrollY) {
-            // Scroll ke bawah -> sembunyikan header
-            setShowHeader(false);
-          } else {
-            // Scroll ke atas -> tampilkan header
-            setShowHeader(true);
-          }
-    
-          setLastScrollY(currentScrollY);
+            const currentScrollY = window.scrollY;
+
+            if (currentScrollY > lastScrollY) {
+                setShowHeader(false);
+            } else {
+                setShowHeader(true);
+            }
+
+            setLastScrollY(currentScrollY);
         };
-    
+
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
-      }, [lastScrollY]);
+    }, [lastScrollY]);
 
     // fetch quotes
     useEffect(() => {
@@ -209,25 +239,54 @@ export default function QuotesList() {
         }, 1500);
     };
 
-    // share handler → generate image
+    // share handler
     const handleShare = async (q) => {
-        const dataUrl = await generateQuoteImage(q.text, q.author, getCategoryLabel(q.category));
+        setSharingId(q.id);
+        try {
+            const dataUrl = await generateQuoteImage(q.text, q.author, q.category);
 
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        const file = new File([blob], "quote.png", { type: "image/png" });
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const file = new File([blob], "quote.png", { type: "image/png" });
 
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                files: [file],
-                title: "Quote Islami",
-                text: `"${q.text}" — ${q.author}`,
-            });
-        } else {
+            if (navigator.share && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: "Quote",
+                    text: `${q.text} — ${q.author}`,
+                });
+            } else {
+                const link = document.createElement("a");
+                link.href = dataUrl;
+                link.download = "quote.png";
+                link.click();
+            }
+        } catch (err) {
+            console.error("Error sharing:", err);
+            alert("Gagal membuat gambar, silakan coba lagi");
+        } finally {
+            setSharingId(null);
+        }
+    };
+
+    // download handler - fitur baru
+    const handleDownload = async (q) => {
+        setDownloadingId(q.id);
+        try {
+            const dataUrl = await generateQuoteImage(q.text, q.author, q.category);
+
+            // Membuat link download
             const link = document.createElement("a");
             link.href = dataUrl;
-            link.download = "quote.png";
+            link.download = `quote_${q.author}_${Date.now()}.png`; // nama file dengan timestamp
+            document.body.appendChild(link);
             link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            console.error("Error downloading:", err);
+            alert("Gagal mendownload gambar, silakan coba lagi");
+        } finally {
+            setDownloadingId(null);
         }
     };
 
@@ -242,10 +301,9 @@ export default function QuotesList() {
         return `Total ${quotes.length} quotes tersedia`;
     };
 
-    // Handler untuk memilih kategori dari bottom sheet
     const handleCategorySelect = (category) => {
         setSelectedCategory(category);
-        setShowFilterSheet(false); // Tutup bottom sheet setelah memilih
+        setShowFilterSheet(false);
     };
 
     return (
@@ -253,11 +311,10 @@ export default function QuotesList() {
             <AddQuote />
             <BottomNav />
             <div className={`fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-200 transition-transform duration-300 ${showHeader ? "translate-y-0" : "-translate-y-full"}`}>
-                    <div className="max-w-xl mx-auto flex items-center justify-between px-3 py-3">
-                      <Link to="/" className="flex items-center font-semibold gap-2 text-[#355485] text-[15px]">
+                <div className="max-w-xl mx-auto flex items-center justify-between px-3 py-3">
+                    <Link to="/" className="flex items-center font-semibold gap-2 text-[#355485] text-[15px]">
                         <i className="ri-arrow-left-line"></i> Quotes
-                      </Link>
-                    {/* Right: Search + Equalizer */}
+                    </Link>
                     <div className="flex items-center gap-4">
                         <button
                             className="text-[#355485]"
@@ -272,9 +329,8 @@ export default function QuotesList() {
                             <i className="ri-equalizer-line text-xl"></i>
                         </button>
                     </div>
-                    </div>
+                </div>
 
-                {/* Input Search yang muncul ketika tombol search diklik */}
                 {showSearch && (
                     <div className="px-3 pb-2">
                         <div className="relative">
@@ -301,13 +357,11 @@ export default function QuotesList() {
             {/* Bottom Sheet untuk Filter Kategori */}
             {showFilterSheet && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center">
-                    {/* Overlay */}
                     <div
                         className="absolute inset-0 bg-black bg-opacity-50"
                         onClick={() => setShowFilterSheet(false)}
                     ></div>
 
-                    {/* Sheet Content */}
                     <div className="relative bg-white rounded-t-2xl w-full max-w-full p-5 overflow-y-auto">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-lg font-semibold">Filter by Category</h2>
@@ -362,16 +416,41 @@ export default function QuotesList() {
             )}
 
             <div className="max-w-4xl mx-auto px-4 pt-[60px] pb-10">
-                {/* Info Jumlah Quotes */}
                 <div className="px-1 mt-3 mb-2">
                     <div className="text-sm text-gray-500 mb-2">{getDisplayMessage()}</div>
                 </div>
 
-                {/* Quotes */}
                 {loading ? (
-                    <div className="bg-white rounded-lg shadow-sm p-8 text-center animate-pulse">
-                        <div className="h-6 bg-gray-200 rounded w-1/2 mx-auto mb-4"></div>
-                        <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto"></div>
+                    <div className="space-y-4">
+                        {[1, 2, 3, 4, 5, 6].map((item) => (
+                            <div key={item} className="relative flex gap-4 px-1 mt-4 border-b mb-3 border-gray-200 pb-4">
+                                <div className="flex-shrink-0 mr-[-4px]">
+                                    <div className="w-11 h-11 rounded-full bg-gray-200 animate-pulse"></div>
+                                </div>
+
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <div className="h-4 bg-gray-200 rounded w-32 animate-pulse mb-2"></div>
+                                            <div className="h-3 bg-gray-200 rounded w-20 animate-pulse"></div>
+                                        </div>
+                                        <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
+                                    </div>
+
+                                    <div className="mt-2 space-y-2">
+                                        <div className="h-4 bg-gray-200 rounded w-full animate-pulse"></div>
+                                        <div className="h-4 bg-gray-200 rounded w-5/6 animate-pulse"></div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 mt-3">
+                                        <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="w-12 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="overflow-hidden">
@@ -381,9 +460,8 @@ export default function QuotesList() {
                                 return (
                                     <div
                                         key={q.id}
-                                        className="relative flex gap-4 px-1 mt-4 border-b mb-3 border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors"
+                                        className="relative flex gap-4 px-1 mt-4 border-b mb-3 border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors pb-2"
                                     >
-                                        {/* Avatar */}
                                         <div className="flex-shrink-0 mr-[-4px]">
                                             <img
                                                 src="https://cdn-icons-png.freepik.com/512/7718/7718888.png "
@@ -392,7 +470,6 @@ export default function QuotesList() {
                                             />
                                         </div>
 
-                                        {/* Content */}
                                         <div className="flex-1">
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -412,12 +489,12 @@ export default function QuotesList() {
                                                 className="text-gray-800 mr-1 text-[15px] leading-relaxed cursor-pointer"
                                                 onClick={() => handleCopy(q.id, q.text, q.author)}
                                             >
-                                                "{highlightText(q.text, searchTerm)}"
+                                                {highlightText(q.text, searchTerm)}
                                             </p>
 
                                             <div className="flex items-center justify-between mt-1 mb-2">
+                                                {/* Kiri: tombol like, copy, share */}
                                                 <div className="flex items-center gap-2 text-gray-500 text-[14px]">
-                                                    {/* Like */}
                                                     <button
                                                         onClick={() => handleLike(q.id)}
                                                         disabled={state.isLiking}
@@ -430,7 +507,6 @@ export default function QuotesList() {
                                                         <span className="text-xs">{state.likesCount}</span>
                                                     </button>
 
-                                                    {/* Copy */}
                                                     <button
                                                         onClick={() => handleCopy(q.id, q.text, q.author)}
                                                         className="hover:text-gray-700"
@@ -438,20 +514,39 @@ export default function QuotesList() {
                                                         <i className="ri-clipboard-line"></i>
                                                     </button>
 
-                                                    {/* Share → generate image */}
                                                     <button
                                                         onClick={() => handleShare(q)}
+                                                        disabled={sharingId === q.id}
                                                         className="hover:text-gray-700"
                                                     >
-                                                        <i className="ri-share-line"></i>
+                                                        {sharingId === q.id ? (
+                                                            <i className="ri-loader-4-line animate-spin"></i>
+                                                        ) : (
+                                                            <i className="ri-share-line"></i>
+                                                        )}
                                                     </button>
                                                 </div>
 
-                                                {state.copied && (
-                                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                                                        Berhasil Disalin!
-                                                    </span>
-                                                )}
+                                                {/* Kanan: tombol download + notifikasi copied */}
+                                                <div className="flex items-center gap-2">
+                                                    {state.copied && (
+                                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                                            Berhasil Disalin!
+                                                        </span>
+                                                    )}
+
+                                                    <button
+                                                        onClick={() => handleDownload(q)}
+                                                        disabled={downloadingId === q.id}
+                                                        className="text-gray-500 hover:text-green-600"
+                                                    >
+                                                        {downloadingId === q.id ? (
+                                                            <i className="ri-loader-4-line animate-spin"></i>
+                                                        ) : (
+                                                            <i className="ri-download-line"></i>
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
