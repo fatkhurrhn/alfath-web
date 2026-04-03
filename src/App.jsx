@@ -48,6 +48,7 @@ import MentahanVideo from "./pages/library/MentahanVideo";
 import DetailSurahSA from "./pages/game/sambungayat/DetailSurah";
 import DetailJuzSA from "./pages/game/sambungayat/DetailJuz";
 import TebakSurah from "./pages/game/TebakSurah";
+import ManageQuotes from "./pages/quotes/ManageQuotes";
 
 function App() {
   return (
@@ -59,6 +60,9 @@ function App() {
         <Route path="/tess" element={<Tess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/listmenu" element={<ListMenu />} />
+        <Route path="/manage/doa" element={<ControlDoa />} />
+        <Route path="/manage/audio" element={<ManageAudio />} />
+        <Route path="/manage/quotes" element={<ManageQuotes />} />
 
         <Route path="/donate" element={<Donate />} />
         <Route path="/kiblat" element={<Kiblat />} />
@@ -68,7 +72,6 @@ function App() {
         <Route path="/selfdev" element={<SelfDevHome />} />
 
         <Route path="/doa" element={<DoaList />} />
-        <Route path="/doa/admin" element={<ControlDoa />} />
         <Route path="/doa/add" element={<AddDoa />} />
         <Route path="/doa/detail/:id" element={<DetailDoa />} />
         
@@ -77,7 +80,6 @@ function App() {
         <Route path="/library" element={<LibraryHome />} />
         <Route path="/library/audio" element={<MentahanAudio />} />
         <Route path="/library/video" element={<MentahanVideo />} />
-        <Route path="/library/audio/admin" element={<ManageAudio />} />
 
         <Route path="/settings" element={<SettingHome />} />
 

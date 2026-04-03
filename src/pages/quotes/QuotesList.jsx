@@ -29,6 +29,40 @@ const getCategoryLabel = (cat) => {
     }
 };
 
+// Fungsi untuk menghitung waktu relatif dalam BAHASA INDONESIA
+const getRelativeTime = (timestamp) => {
+    if (!timestamp) return "";
+
+    // Konversi Firebase timestamp
+    let date;
+    if (timestamp?.toDate) {
+        date = timestamp.toDate();
+    } else if (timestamp?.seconds) {
+        date = new Date(timestamp.seconds * 1000);
+    } else {
+        date = new Date(timestamp);
+    }
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffYears > 0) return `${diffYears} tahun yang lalu`;
+    if (diffMonths > 0) return `${diffMonths} bulan yang lalu`;
+    if (diffWeeks > 0) return `${diffWeeks} minggu yang lalu`;
+    if (diffDays > 0) return `${diffDays} hari yang lalu`;
+    if (diffHours > 0) return `${diffHours} jam yang lalu`;
+    if (diffMins > 0) return `${diffMins} menit yang lalu`;
+    if (diffSecs > 10) return `${diffSecs} detik yang lalu`;
+    return "baru saja";
+};
+
 const generateQuoteImage = async (quote, author, category) => {
     return new Promise((resolve, reject) => {
         const canvas = document.createElement("canvas");
@@ -58,14 +92,13 @@ const generateQuoteImage = async (quote, author, category) => {
             // Setting untuk teks quote
             ctx.fillStyle = "#000000";
             ctx.textAlign = "center";
-            ctx.textBaseline = "middle"; // INI KUNCI NYA!
+            ctx.textBaseline = "middle";
             ctx.font = "52px Arial";
 
             const maxWidth = 900;
             const wrapped = wrapText(ctx, quote, maxWidth);
             const lineHeight = 70;
 
-            // Hitung posisi Y awal untuk baris pertama
             const totalTextHeight = wrapped.length * lineHeight;
             const startY = (canvas.height - totalTextHeight) / 2 + (lineHeight / 2);
 
@@ -83,7 +116,7 @@ const generateQuoteImage = async (quote, author, category) => {
 
             ctx.fillStyle = "#000000";
             ctx.textAlign = "center";
-            ctx.textBaseline = "middle"; // INI JUGA
+            ctx.textBaseline = "middle";
             ctx.font = "52px Arial";
 
             const maxWidth = 900;
@@ -136,7 +169,31 @@ export default function QuotesList() {
     const [showHeader, setShowHeader] = useState(true);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [sharingId, setSharingId] = useState(null);
-    const [downloadingId, setDownloadingId] = useState(null); // state untuk loading download
+    const [downloadingId, setDownloadingId] = useState(null);
+
+    // State untuk popup konfirmasi download
+    const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
+    const [pendingDownload, setPendingDownload] = useState(null);
+    // State untuk tracking jumlah download per quote (bisa disimpan di localStorage)
+    const [downloadCounts, setDownloadCounts] = useState({});
+
+    // Load download counts dari localStorage saat mount
+    useEffect(() => {
+        const savedCounts = localStorage.getItem("quoteDownloadCounts");
+        if (savedCounts) {
+            setDownloadCounts(JSON.parse(savedCounts));
+        }
+    }, []);
+
+    // Save download counts ke localStorage
+    const saveDownloadCount = (quoteId) => {
+        const newCounts = {
+            ...downloadCounts,
+            [quoteId]: (downloadCounts[quoteId] || 0) + 1
+        };
+        setDownloadCounts(newCounts);
+        localStorage.setItem("quoteDownloadCounts", JSON.stringify(newCounts));
+    };
 
     useEffect(() => {
         const handleScroll = () => {
@@ -269,25 +326,55 @@ export default function QuotesList() {
         }
     };
 
-    // download handler - fitur baru
-    const handleDownload = async (q) => {
+    // Fungsi download sebenarnya
+    const performDownload = async (q) => {
         setDownloadingId(q.id);
         try {
             const dataUrl = await generateQuoteImage(q.text, q.author, q.category);
-
-            // Membuat link download
             const link = document.createElement("a");
             link.href = dataUrl;
-            link.download = `quote_${q.author}_${Date.now()}.png`; // nama file dengan timestamp
+            link.download = `quote_${q.author}_${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+
+            // Simpan jumlah download
+            saveDownloadCount(q.id);
         } catch (err) {
             console.error("Error downloading:", err);
             alert("Gagal mendownload gambar, silakan coba lagi");
         } finally {
             setDownloadingId(null);
         }
+    };
+
+    // download handler dengan popup konfirmasi
+    const handleDownload = (q) => {
+        const downloadCount = downloadCounts[q.id] || 0;
+
+        // Jika sudah lebih dari 1x download, tampilkan popup konfirmasi
+        if (downloadCount >= 1) {
+            setPendingDownload(q);
+            setShowDownloadConfirm(true);
+        } else {
+            // Download langsung
+            performDownload(q);
+        }
+    };
+
+    // Konfirmasi download lanjut
+    const confirmDownload = () => {
+        if (pendingDownload) {
+            performDownload(pendingDownload);
+            setPendingDownload(null);
+        }
+        setShowDownloadConfirm(false);
+    };
+
+    // Batal download
+    const cancelDownload = () => {
+        setPendingDownload(null);
+        setShowDownloadConfirm(false);
     };
 
     const getDisplayMessage = () => {
@@ -310,6 +397,44 @@ export default function QuotesList() {
         <div className="bg-gray-50 min-h-screen text-gray-800">
             <AddQuote />
             <BottomNav />
+
+            {/* Popup Konfirmasi Download */}
+            {showDownloadConfirm && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+                    <div
+                        className="absolute inset-0 bg-black bg-opacity-50"
+                        onClick={cancelDownload}
+                    ></div>
+                    <div className="relative bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl transform transition-all">
+                        <div className="text-center">
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
+                                <i className="ri-alert-line text-yellow-600 text-2xl"></i>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                Perhatian!
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Anda sudah mendownload quote ini sebelumnya. Apakah Anda yakin ingin mendownload lagi?
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={cancelDownload}
+                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                    Batalkan
+                                </button>
+                                <button
+                                    onClick={confirmDownload}
+                                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                    Tetap Download
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className={`fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-200 transition-transform duration-300 ${showHeader ? "translate-y-0" : "-translate-y-full"}`}>
                 <div className="max-w-xl mx-auto flex items-center justify-between px-3 py-3">
                     <Link to="/" className="flex items-center font-semibold gap-2 text-[#355485] text-[15px]">
@@ -457,6 +582,7 @@ export default function QuotesList() {
                         {filteredQuotes.length > 0 ? (
                             filteredQuotes.map((q) => {
                                 const state = quoteStates[q.id] || {};
+                                const downloadCount = downloadCounts[q.id] || 0;
                                 return (
                                     <div
                                         key={q.id}
@@ -464,7 +590,7 @@ export default function QuotesList() {
                                     >
                                         <div className="flex-shrink-0 mr-[-4px]">
                                             <img
-                                                src="https://cdn-icons-png.freepik.com/512/7718/7718888.png "
+                                                src="https://cdn-icons-png.freepik.com/512/7718/7718888.png"
                                                 alt="Profile"
                                                 className="w-11 h-11 rounded-full object-cover"
                                             />
@@ -480,9 +606,10 @@ export default function QuotesList() {
                                                         #{getCategoryLabel(q.category)}
                                                     </span>
                                                 </div>
-                                                <button className="text-gray-400 hover:text-gray-600">
-                                                    <i className="ri-more-line text-[18px]"></i>
-                                                </button>
+                                                {/* Teks waktu relatif dalam Bahasa Indonesia */}
+                                                <span className="text-[11px] text-gray-400 whitespace-nowrap ml-2">
+                                                    {getRelativeTime(q.createdAt)}
+                                                </span>
                                             </div>
 
                                             <p
@@ -527,7 +654,7 @@ export default function QuotesList() {
                                                     </button>
                                                 </div>
 
-                                                {/* Kanan: tombol download + notifikasi copied */}
+                                                {/* Kanan: tombol download + notifikasi copied + counter download */}
                                                 <div className="flex items-center gap-2">
                                                     {state.copied && (
                                                         <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
@@ -535,17 +662,24 @@ export default function QuotesList() {
                                                         </span>
                                                     )}
 
-                                                    <button
-                                                        onClick={() => handleDownload(q)}
-                                                        disabled={downloadingId === q.id}
-                                                        className="text-gray-500 hover:text-green-600"
-                                                    >
-                                                        {downloadingId === q.id ? (
-                                                            <i className="ri-loader-4-line animate-spin"></i>
-                                                        ) : (
-                                                            <i className="ri-download-line"></i>
-                                                        )}
-                                                    </button>
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={() => handleDownload(q)}
+                                                            disabled={downloadingId === q.id}
+                                                            className="text-gray-500 hover:text-green-600 transition-colors"
+                                                        >
+                                                            {downloadingId === q.id ? (
+                                                                <i className="ri-loader-4-line animate-spin"></i>
+                                                            ) : (
+                                                                <i className="ri-download-line"></i>
+                                                            )}
+                                                        </button>
+                                                        {/* {downloadCount > 0 && (
+                                                            <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+                                                                {downloadCount}
+                                                            </span>
+                                                        )} */}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
